@@ -3,6 +3,8 @@ package com.akshit.ftpclient;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
 
 public class FTPClient extends JFrame {
@@ -13,6 +15,7 @@ public class FTPClient extends JFrame {
     private JTextArea logArea;
     private JList<String> fileList;
     private DefaultListModel<String> listModel;
+    private JProgressBar progressBar;
 
     private FTPManager ftpManager;
 
@@ -51,6 +54,8 @@ public class FTPClient extends JFrame {
         scrollPane.setBorder(BorderFactory.createTitledBorder("Remote Files"));
         centerPanel.add(scrollPane, BorderLayout.CENTER);
 
+        JPanel southPanel = new JPanel(new BorderLayout(5, 5));
+
         JPanel buttonPanel = new JPanel(new GridLayout(1, 3, 10, 10));
         uploadBtn = new JButton("Upload");
         downloadBtn = new JButton("Download");
@@ -63,7 +68,13 @@ public class FTPClient extends JFrame {
         buttonPanel.add(uploadBtn);
         buttonPanel.add(downloadBtn);
         buttonPanel.add(refreshBtn);
-        centerPanel.add(buttonPanel, BorderLayout.SOUTH);
+        southPanel.add(buttonPanel, BorderLayout.NORTH);
+
+        progressBar = new JProgressBar(0, 100);
+        progressBar.setStringPainted(true);
+        southPanel.add(progressBar, BorderLayout.SOUTH);
+
+        centerPanel.add(southPanel, BorderLayout.SOUTH);
 
         add(centerPanel, BorderLayout.CENTER);
 
@@ -76,11 +87,21 @@ public class FTPClient extends JFrame {
         logPanel.add(logScroll, BorderLayout.CENTER);
         add(logPanel, BorderLayout.SOUTH);
 
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                if (ftpManager != null && ftpManager.isConnected()) {
+                    ftpManager.disconnect();
+                }
+            }
+        });
+
         setVisible(true);
         setLocationRelativeTo(null);
 
         log("Welcome to Akshit's FTP Client!");
         log("Enter credentials and click Connect.");
+        updateControlState(false);
     }
 
     private void connectToServer(ActionEvent e) {
@@ -90,6 +111,7 @@ public class FTPClient extends JFrame {
 
         log("Connecting to " + server + " ...");
         ftpManager = new FTPManager(logArea);
+        updateControlState(true);
 
         SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
             @Override
@@ -109,6 +131,8 @@ public class FTPClient extends JFrame {
                     }
                 } catch (Exception ex) {
                     log("Connection error: " + ex.getMessage());
+                } finally {
+                    updateControlState(false);
                 }
             }
         };
@@ -123,11 +147,31 @@ public class FTPClient extends JFrame {
 
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Select file to upload");
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = chooser.getSelectedFile();
-            log("Uploading " + file.getName() + "...");
-            ftpManager.uploadFile(file);
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
         }
+        File file = chooser.getSelectedFile();
+        log("Uploading " + file.getName() + "...");
+        updateControlState(true);
+        resetProgress();
+
+        SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Boolean doInBackground() {
+                return ftpManager.uploadFile(file, this::onProgress);
+            }
+
+            private void onProgress(long transferred, long total) {
+                SwingUtilities.invokeLater(() -> updateProgress(transferred, total));
+            }
+
+            @Override
+            protected void done() {
+                log("Upload complete.");
+                updateControlState(false);
+            }
+        };
+        worker.execute();
     }
 
     private void downloadFile(ActionEvent e) {
@@ -146,11 +190,31 @@ public class FTPClient extends JFrame {
         chooser.setDialogTitle("Save file as");
         chooser.setSelectedFile(new File(selectedFile));
 
-        if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File saveFile = chooser.getSelectedFile();
-            log("Downloading " + selectedFile + "...");
-            ftpManager.downloadFile(selectedFile, saveFile);
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
         }
+        File saveFile = chooser.getSelectedFile();
+        log("Downloading " + selectedFile + "...");
+        updateControlState(true);
+        resetProgress();
+
+        SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Boolean doInBackground() {
+                return ftpManager.downloadFile(selectedFile, saveFile, this::onProgress);
+            }
+
+            private void onProgress(long transferred, long total) {
+                SwingUtilities.invokeLater(() -> updateProgress(transferred, total));
+            }
+
+            @Override
+            protected void done() {
+                log("Download complete.");
+                updateControlState(false);
+            }
+        };
+        worker.execute();
     }
 
     private void refreshFiles(ActionEvent e) {
@@ -159,6 +223,7 @@ public class FTPClient extends JFrame {
             return;
         }
 
+        updateControlState(true);
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() {
@@ -173,9 +238,36 @@ public class FTPClient extends JFrame {
             @Override
             protected void done() {
                 log("File list refreshed.");
+                updateControlState(false);
             }
         };
         worker.execute();
+    }
+
+    private void resetProgress() {
+        progressBar.setIndeterminate(false);
+        progressBar.setValue(0);
+        progressBar.setString(null);
+    }
+
+    private void updateProgress(long transferred, long total) {
+        if (total <= 0) {
+            progressBar.setIndeterminate(true);
+            return;
+        }
+        progressBar.setIndeterminate(false);
+        int percent = (int) Math.min(100, (transferred * 100) / total);
+        progressBar.setValue(percent);
+        progressBar.setString(percent + "%");
+    }
+
+    /** Enables/disables the action buttons; {@code busy} disables everything, otherwise availability follows connection state. */
+    private void updateControlState(boolean busy) {
+        boolean connected = ftpManager != null && ftpManager.isConnected();
+        connectBtn.setEnabled(!busy);
+        uploadBtn.setEnabled(!busy && connected);
+        downloadBtn.setEnabled(!busy && connected);
+        refreshBtn.setEnabled(!busy && connected);
     }
 
     private void log(String message) {
