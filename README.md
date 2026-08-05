@@ -20,8 +20,9 @@ Built as part of Akshit’s *Java Projects Series*, this project demonstrates pr
 ## 🚀 Features
 
 ✅ **Connect to FTP Servers** — Enter hostname, username, and password  
+✅ **Optional FTPS** — Secure the control and data channels with a checkbox  
 ✅ **List Remote Files** — Displays files and folders from the connected server  
-✅ **Upload & Download** — Supports bidirectional file transfer  
+✅ **Upload & Download** — Supports bidirectional file transfer with a live progress bar  
 ✅ **Background Tasks** — Uses `SwingWorker` for non-blocking operations  
 ✅ **Real-time Logs** — Shows live connection and file transfer updates  
 ✅ **Maven-based Build** — Simple to compile and run across any system
@@ -48,13 +49,12 @@ FTP-Client/
 ├── pom.xml
 ├── src/
 │   ├── main/
-│   │   ├── java/com/akshit/ftpclient/
-│   │   │   ├── FTPClientApp.java
-│   │   │   └── FTPManager.java
-│   │   └── resources/
+│   │   └── java/com/akshit/ftpclient/
+│   │       ├── FTPClient.java   (GUI / entry point)
+│   │       └── FTPManager.java  (FTP session + transfer logic)
 │   └── test/
-│       └── java/
-└── logs/
+│       └── java/com/akshit/ftpclient/
+│           └── FTPManagerTest.java
 ```
 
 ---
@@ -95,7 +95,15 @@ mvn clean compile
 ### ▶️ Run
 
 ```bash
-mvn exec:java "-Dexec.mainClass=com.akshit.ftpclient.FTPClientApp"
+mvn exec:java "-Dexec.mainClass=com.akshit.ftpclient.FTPClient"
+```
+
+---
+
+### ✅ Run Tests
+
+```bash
+mvn test
 ```
 
 ---
@@ -164,9 +172,8 @@ Connected to test.rebex.net
 
 ## 🧩 Future Enhancements
 
-🚀 Add progress bars for upload/download tasks  
 📂 Enable directory navigation (double-click folders)  
-💾 Export session logs to `ftp.log`  
+💾 Export session logs to a file  
 ☁️ Support SFTP via Apache Commons VFS  
 🌐 Add “Saved Profiles” for frequently used FTP servers
 
