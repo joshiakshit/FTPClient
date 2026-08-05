@@ -6,11 +6,13 @@ import java.awt.event.ActionEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
+import java.util.Arrays;
 
 public class FTPClient extends JFrame {
 
     private JTextField serverField, userField;
     private JPasswordField passField;
+    private JCheckBox ftpsCheckBox;
     private JButton connectBtn, uploadBtn, downloadBtn, refreshBtn;
     private JTextArea logArea;
     private JList<String> fileList;
@@ -31,6 +33,7 @@ public class FTPClient extends JFrame {
         serverField = new JTextField("test.rebex.net");
         userField = new JTextField("demo");
         passField = new JPasswordField("password");
+        ftpsCheckBox = new JCheckBox("Use FTPS (secure)");
 
         connectBtn = new JButton("Connect");
         connectBtn.addActionListener(this::connectToServer);
@@ -41,6 +44,7 @@ public class FTPClient extends JFrame {
         topPanel.add(userField);
         topPanel.add(new JLabel("Password:"));
         topPanel.add(passField);
+        topPanel.add(ftpsCheckBox);
         topPanel.add(connectBtn);
 
         add(topPanel, BorderLayout.NORTH);
@@ -107,10 +111,12 @@ public class FTPClient extends JFrame {
     private void connectToServer(ActionEvent e) {
         String server = serverField.getText();
         String user = userField.getText();
-        String pass = new String(passField.getPassword());
+        char[] passChars = passField.getPassword();
+        String pass = new String(passChars);
+        Arrays.fill(passChars, '\0');
 
         log("Connecting to " + server + " ...");
-        ftpManager = new FTPManager(logArea);
+        ftpManager = new FTPManager(logArea, ftpsCheckBox.isSelected());
         updateControlState(true);
 
         SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
@@ -167,8 +173,13 @@ public class FTPClient extends JFrame {
 
             @Override
             protected void done() {
-                log("Upload complete.");
-                updateControlState(false);
+                try {
+                    log(get() ? "Upload complete." : "Upload failed.");
+                } catch (Exception ex) {
+                    log("Upload error: " + ex.getMessage());
+                } finally {
+                    updateControlState(false);
+                }
             }
         };
         worker.execute();
@@ -210,8 +221,13 @@ public class FTPClient extends JFrame {
 
             @Override
             protected void done() {
-                log("Download complete.");
-                updateControlState(false);
+                try {
+                    log(get() ? "Download complete." : "Download failed.");
+                } catch (Exception ex) {
+                    log("Download error: " + ex.getMessage());
+                } finally {
+                    updateControlState(false);
+                }
             }
         };
         worker.execute();
@@ -237,8 +253,14 @@ public class FTPClient extends JFrame {
 
             @Override
             protected void done() {
-                log("File list refreshed.");
-                updateControlState(false);
+                try {
+                    get();
+                    log("File list refreshed.");
+                } catch (Exception ex) {
+                    log("Error refreshing file list: " + ex.getMessage());
+                } finally {
+                    updateControlState(false);
+                }
             }
         };
         worker.execute();
